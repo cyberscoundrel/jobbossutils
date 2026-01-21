@@ -116,7 +116,7 @@ def execute_updates(manifest_path: str, username: str, password: str,
     # Create COM object
     print("Connecting to JobBOSS...")
     try:
-        jb = win32com.client.Dispatch("JBRequestProcessor.RequestProcessor")
+        jb = win32com.client.Dispatch("JBInterface.JBRequestProcessor")
     except Exception as e:
         error_msg = f"Failed to create JobBOSS COM object: {e}"
         print(f"ERROR: {error_msg}")
@@ -127,14 +127,20 @@ def execute_updates(manifest_path: str, username: str, password: str,
     # Create session
     print(f"Creating session for user: {username}")
     try:
-        error_msg = ""
-        session_id = jb.CreateSession(username, password, error_msg)
+        result = jb.CreateSession(username, password, "")
+        # COM returns tuple: (session_id, error_msg) due to byref parameter
+        if isinstance(result, tuple):
+            session_id, error_msg = result[0], result[1] if len(result) > 1 else ""
+        else:
+            session_id = result
+            error_msg = ""
+        
         if not session_id:
             error_msg = f"Failed to create session: {error_msg}"
             print(f"ERROR: {error_msg}")
             results["errors"].append(error_msg)
             return results
-        print(f"Session created successfully")
+        print(f"Session created: {session_id}")
     except Exception as e:
         error_msg = f"Failed to create session: {e}"
         print(f"ERROR: {error_msg}")

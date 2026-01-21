@@ -5,7 +5,7 @@ A two-phase workflow for updating material quantities in JobBOSS via the XML SDK
 ## Requirements
 
 - Windows with JobBOSS installed
-- JobBOSS COM SDK registered (`JBRequestProcessor.RequestProcessor`)
+- JobBOSS COM SDK registered (`JBInterface.JBRequestProcessor`)
 - Python 3.10+
 
 ## Installation
