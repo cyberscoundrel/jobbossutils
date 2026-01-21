@@ -65,10 +65,4 @@ python xml_executor.py --manifest ./pending_updates/manifest.json --dry-run
 python xml_executor.py --manifest ./pending_updates/manifest.json
 ```
 
-## Local-only files
 
-To exclude local documentation from git, add to `.git/info/exclude`:
-
-```
-JobBOSS XML SDK Developer's Guide.html
-```
