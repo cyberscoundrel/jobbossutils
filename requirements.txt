@@ -1,0 +1,12 @@
+# JobBOSS Material Quantity Update Tool
+# =====================================
+#
+# Two-phase workflow:
+#   1. xml_generator.py - Generate XML files for review
+#   2. xml_executor.py  - Execute the reviewed XML files
+#
+# Install dependencies:
+#   pip install -r requirements.txt
+
+# Required for Windows COM object interaction with JobBOSS
+pywin32>=306

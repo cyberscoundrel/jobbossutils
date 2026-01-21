@@ -1,0 +1,20 @@
+# Material IDs Input File
+# =======================
+# One material ID per line.
+# Each line represents ONE PIECE being removed from inventory.
+# Duplicates are allowed - they will be counted and combined.
+#
+# Example: If MAT-001 appears 3 times, the update will be -3 pieces.
+#
+# Lines starting with # are comments and will be ignored.
+# Empty lines are also ignored.
+
+# Uncomment and edit the lines below with your actual material IDs:
+# MAT-001
+# MAT-001
+# MAT-001
+# MAT-002
+# MAT-003
+# MAT-003
+02390219
+02390177
