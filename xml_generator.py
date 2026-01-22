@@ -36,11 +36,11 @@ def count_materials(material_ids: list[str]) -> dict[str, int]:
     Count occurrences of each material ID.
     Each occurrence = 1 piece to remove from inventory.
     
-    Returns dict of {material_id: count} (positive values - direction set by reason code)
+    Returns dict of {material_id: negative_count} for subtraction
     """
     counts = Counter(material_ids)
-    # Return positive counts - the reason code determines if it's add or subtract
-    return {mat_id: count for mat_id, count in counts.items()}
+    # Return negative counts to subtract from inventory
+    return {mat_id: -count for mat_id, count in counts.items()}
 
 
 # =============================================================================
@@ -66,8 +66,11 @@ def create_material_query_xml(session_id_placeholder: str, material_id: str) -> 
 
 def create_material_mod_xml(session_id_placeholder: str, material_id: str,
                             last_updated_placeholder: str, quantity: int,
-                            reason_id: str) -> str:
+                            reason_id: str | None = None) -> str:
     """Create XML to modify a material's on-hand quantity."""
+    # Build ReasonRef element only if reason_id is provided
+    reason_element = f'<ReasonRef ID="{reason_id}"/>' if reason_id else ''
+    
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <JBXML>
     <JBXMLRequest Session="{session_id_placeholder}">
@@ -77,7 +80,7 @@ def create_material_mod_xml(session_id_placeholder: str, material_id: str,
                 <LastUpdated>{last_updated_placeholder}</LastUpdated>
             </MaterialMod>
             <AdjustOnHandQty>
-                <ReasonRef ID="{reason_id}"/>
+                {reason_element}
                 <Quantity>{quantity}</Quantity>
             </AdjustOnHandQty>
         </MaterialModRq>
@@ -103,7 +106,7 @@ def load_material_ids(input_path: str) -> list[str]:
 
 def generate_update_package(material_ids: list[str], 
                             output_dir: str,
-                            reason_id: str = "ADJUST") -> dict:
+                            reason_id: str | None = None) -> dict:
     """
     Generate XML files and manifest for material updates.
     
@@ -138,7 +141,7 @@ def generate_update_package(material_ids: list[str],
         # Sanitize material ID for filename (replace unsafe chars)
         safe_id = "".join(c if c.isalnum() or c in '-_' else '_' for c in material_id)
         
-        print(f"  {material_id}: -{quantity} pieces (subtract)")
+        print(f"  {material_id}: {quantity} pieces")
         
         # Generate query XML
         query_xml = create_material_query_xml("{{SESSION_ID}}", material_id)
@@ -220,8 +223,8 @@ Each line = 1 piece removed. Above example generates:
     )
     parser.add_argument(
         '--reason', '-r',
-        default='ADJUST',
-        help='Reason code for adjustment (default: ADJUST)'
+        default=None,
+        help='Reason code for adjustment (optional - omit for no reason)'
     )
     
     return parser.parse_args()

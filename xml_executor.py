@@ -109,7 +109,7 @@ def execute_updates(manifest_path: str, username: str, password: str,
         print()
         print("Would execute the following updates:")
         for item in manifest["materials"]:
-            print(f"  {item['material_id']}: -{item['quantity_change']} ({item['occurrences']} pieces)")
+            print(f"  {item['material_id']}: {item['quantity_change']:+d} ({item['occurrences']} pieces)")
         print()
         print("To execute for real, remove the --dry-run flag.")
         return results
@@ -154,7 +154,7 @@ def execute_updates(manifest_path: str, username: str, password: str,
             material_id = item["material_id"]
             quantity_change = item["quantity_change"]
             
-            print(f"\nProcessing: {material_id} (-{quantity_change} pieces)")
+            print(f"\nProcessing: {material_id} ({quantity_change:+d} pieces)")
             
             # Step 1: Load and execute query XML to get LastUpdated
             query_path = os.path.join(manifest_dir, item["query_file"])
@@ -276,7 +276,7 @@ def execute_updates(manifest_path: str, username: str, password: str,
                 continue
             
             if check_response_success(response):
-                print(f"  SUCCESS: Subtracted {quantity_change}")
+                print(f"  SUCCESS: Adjusted by {quantity_change:+d}")
                 results["success"].append({
                     "material_id": material_id,
                     "quantity_change": quantity_change
@@ -398,7 +398,7 @@ def main():
     
     if results["success"]:
         total_adjusted = sum(item["quantity_change"] for item in results["success"])
-        print(f"Total quantity subtracted: {total_adjusted}")
+        print(f"Total quantity adjusted: {total_adjusted:+d}")
     
     if results["failed"]:
         print("\nFailed materials:")
