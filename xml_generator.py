@@ -36,11 +36,11 @@ def count_materials(material_ids: list[str]) -> dict[str, int]:
     Count occurrences of each material ID.
     Each occurrence = 1 piece to remove from inventory.
     
-    Returns dict of {material_id: negative_quantity}
+    Returns dict of {material_id: count} (positive values - direction set by reason code)
     """
     counts = Counter(material_ids)
-    # Each occurrence means remove 1 piece (negative quantity)
-    return {mat_id: -count for mat_id, count in counts.items()}
+    # Return positive counts - the reason code determines if it's add or subtract
+    return {mat_id: count for mat_id, count in counts.items()}
 
 
 # =============================================================================
@@ -138,7 +138,7 @@ def generate_update_package(material_ids: list[str],
         # Sanitize material ID for filename (replace unsafe chars)
         safe_id = "".join(c if c.isalnum() or c in '-_' else '_' for c in material_id)
         
-        print(f"  {material_id}: {quantity:+d} pieces")
+        print(f"  {material_id}: -{quantity} pieces (subtract)")
         
         # Generate query XML
         query_xml = create_material_query_xml("{{SESSION_ID}}", material_id)
