@@ -51,8 +51,7 @@ def create_material_query_xml(session_id_placeholder: str, material_id: str) -> 
     """Create XML to query a material and get its LastUpdated timestamp."""
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <JBXML>
-    <JBXMLRequest>
-        <SessionID>{session_id_placeholder}</SessionID>
+    <JBXMLRequest Session="{session_id_placeholder}">
         <MaterialQueryRq>
             <MaterialQueryFilter>
                 <ID>{material_id}</ID>
@@ -71,8 +70,7 @@ def create_material_mod_xml(session_id_placeholder: str, material_id: str,
     """Create XML to modify a material's on-hand quantity."""
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <JBXML>
-    <JBXMLRequest>
-        <SessionID>{session_id_placeholder}</SessionID>
+    <JBXMLRequest Session="{session_id_placeholder}">
         <MaterialModRq>
             <MaterialMod>
                 <ID>{material_id}</ID>
