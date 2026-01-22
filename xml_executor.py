@@ -76,7 +76,8 @@ def check_response_success(response_xml: str) -> bool:
 # =============================================================================
 
 def execute_updates(manifest_path: str, username: str, password: str, 
-                    dry_run: bool = False, verbose: bool = False) -> dict:
+                    dry_run: bool = False, verbose: bool = False,
+                    log_dir: str | None = None) -> dict:
     """
     Execute the material updates from a manifest.
     
@@ -86,11 +87,29 @@ def execute_updates(manifest_path: str, username: str, password: str,
         password: JobBOSS password
         dry_run: If True, show what would be done without executing
         verbose: If True, print full XML requests and responses
+        log_dir: If provided, save all XML requests/responses to this directory
         
     Returns:
         Dict with 'success', 'failed', and 'errors' lists
     """
     results = {"success": [], "failed": [], "errors": []}
+    
+    # Set up logging directory if requested
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        log_index = 0
+        
+        def save_xml_log(material_id: str, request_type: str, direction: str, xml_content: str):
+            nonlocal log_index
+            log_index += 1
+            filename = f"{log_index:03d}_{material_id}_{request_type}_{direction}.xml"
+            filepath = os.path.join(log_dir, filename)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(xml_content)
+            print(f"  Logged: {filename}")
+    else:
+        def save_xml_log(material_id: str, request_type: str, direction: str, xml_content: str):
+            pass  # No-op when logging is disabled
     
     # Load manifest
     manifest_dir = os.path.dirname(os.path.abspath(manifest_path))
@@ -181,8 +200,11 @@ def execute_updates(manifest_path: str, username: str, password: str,
                 print(query_xml)
                 print(f"  --- END REQUEST ---")
             
+            save_xml_log(material_id, "query", "request", query_xml)
+            
             try:
                 response = jb.ProcessRequest(query_xml)
+                save_xml_log(material_id, "query", "response", response)
                 if verbose:
                     print(f"  --- QUERY RESPONSE ---")
                     print(response)
@@ -248,8 +270,11 @@ def execute_updates(manifest_path: str, username: str, password: str,
                 print(update_xml)
                 print(f"  --- END REQUEST ---")
             
+            save_xml_log(material_id, "update", "request", update_xml)
+            
             try:
                 response = jb.ProcessRequest(update_xml)
+                save_xml_log(material_id, "update", "response", response)
                 if verbose:
                     print(f"  --- UPDATE RESPONSE ---")
                     print(response)
@@ -321,6 +346,9 @@ Examples:
     # Verbose mode (show XML requests/responses)
     python xml_executor.py --manifest ./pending_updates/manifest.json --user myuser --password mypass --verbose
     
+    # Log all XML to files for support
+    python xml_executor.py --manifest ./pending_updates/manifest.json --user myuser --password mypass --log-xml ./xml_logs
+    
     # Using environment variables
     set JOBBOSS_USER=myuser
     set JOBBOSS_PASSWORD=mypass
@@ -352,6 +380,14 @@ Examples:
         '--verbose', '-v',
         action='store_true',
         help='Show full XML requests and responses'
+    )
+    parser.add_argument(
+        '--log-xml',
+        nargs='?',
+        const='./xml_logs',
+        default=None,
+        metavar='DIR',
+        help='Save all XML requests and responses to directory (default: ./xml_logs)'
     )
     
     return parser.parse_args()
@@ -386,7 +422,7 @@ def main():
     print()
     
     # Execute updates
-    results = execute_updates(args.manifest, args.user, args.password, args.dry_run, args.verbose)
+    results = execute_updates(args.manifest, args.user, args.password, args.dry_run, args.verbose, args.log_xml)
     
     # Print summary
     print()
