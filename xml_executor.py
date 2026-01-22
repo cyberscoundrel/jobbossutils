@@ -76,7 +76,7 @@ def check_response_success(response_xml: str) -> bool:
 # =============================================================================
 
 def execute_updates(manifest_path: str, username: str, password: str, 
-                    dry_run: bool = False) -> dict:
+                    dry_run: bool = False, verbose: bool = False) -> dict:
     """
     Execute the material updates from a manifest.
     
@@ -85,6 +85,7 @@ def execute_updates(manifest_path: str, username: str, password: str,
         username: JobBOSS username
         password: JobBOSS password
         dry_run: If True, show what would be done without executing
+        verbose: If True, print full XML requests and responses
         
     Returns:
         Dict with 'success', 'failed', and 'errors' lists
@@ -175,8 +176,17 @@ def execute_updates(manifest_path: str, username: str, password: str,
             query_xml = query_xml.replace("{{SESSION_ID}}", session_id)
             
             print(f"  Querying for LastUpdated...")
+            if verbose:
+                print(f"  --- QUERY REQUEST ---")
+                print(query_xml)
+                print(f"  --- END REQUEST ---")
+            
             try:
                 response = jb.ProcessRequest(query_xml)
+                if verbose:
+                    print(f"  --- QUERY RESPONSE ---")
+                    print(response)
+                    print(f"  --- END RESPONSE ---")
             except Exception as e:
                 error = f"Query failed: {e}"
                 print(f"  ERROR: {error}")
@@ -233,8 +243,17 @@ def execute_updates(manifest_path: str, username: str, password: str,
             update_xml = update_xml.replace("{{LAST_UPDATED}}", last_updated)
             
             print(f"  Executing update...")
+            if verbose:
+                print(f"  --- UPDATE REQUEST ---")
+                print(update_xml)
+                print(f"  --- END REQUEST ---")
+            
             try:
                 response = jb.ProcessRequest(update_xml)
+                if verbose:
+                    print(f"  --- UPDATE RESPONSE ---")
+                    print(response)
+                    print(f"  --- END RESPONSE ---")
             except Exception as e:
                 error = f"Update failed: {e}"
                 print(f"  ERROR: {error}")
@@ -299,6 +318,9 @@ Examples:
     # Dry run (preview only)
     python xml_executor.py --manifest ./pending_updates/manifest.json --user myuser --password mypass --dry-run
     
+    # Verbose mode (show XML requests/responses)
+    python xml_executor.py --manifest ./pending_updates/manifest.json --user myuser --password mypass --verbose
+    
     # Using environment variables
     set JOBBOSS_USER=myuser
     set JOBBOSS_PASSWORD=mypass
@@ -325,6 +347,11 @@ Examples:
         '--dry-run',
         action='store_true',
         help='Show what would be done without executing'
+    )
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Show full XML requests and responses'
     )
     
     return parser.parse_args()
@@ -359,7 +386,7 @@ def main():
     print()
     
     # Execute updates
-    results = execute_updates(args.manifest, args.user, args.password, args.dry_run)
+    results = execute_updates(args.manifest, args.user, args.password, args.dry_run, args.verbose)
     
     # Print summary
     print()
