@@ -66,11 +66,8 @@ def create_material_query_xml(session_id_placeholder: str, material_id: str) -> 
 
 def create_material_mod_xml(session_id_placeholder: str, material_id: str,
                             last_updated_placeholder: str, quantity: int,
-                            reason_id: str | None = None) -> str:
+                            reason_id: str) -> str:
     """Create XML to modify a material's on-hand quantity."""
-    # Build ReasonRef element only if reason_id is provided
-    reason_element = f'<ReasonRef ID="{reason_id}"/>' if reason_id else ''
-    
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <JBXML>
     <JBXMLRequest Session="{session_id_placeholder}">
@@ -80,7 +77,7 @@ def create_material_mod_xml(session_id_placeholder: str, material_id: str,
                 <LastUpdated>{last_updated_placeholder}</LastUpdated>
             </MaterialMod>
             <AdjustOnHandQty>
-                {reason_element}
+                <ReasonRef ID="{reason_id}"/>
                 <Quantity>{quantity}</Quantity>
             </AdjustOnHandQty>
         </MaterialModRq>
@@ -106,7 +103,7 @@ def load_material_ids(input_path: str) -> list[str]:
 
 def generate_update_package(material_ids: list[str], 
                             output_dir: str,
-                            reason_id: str | None = None) -> dict:
+                            reason_id: str = "") -> dict:
     """
     Generate XML files and manifest for material updates.
     
@@ -223,8 +220,8 @@ Each line = 1 piece removed. Above example generates:
     )
     parser.add_argument(
         '--reason', '-r',
-        default=None,
-        help='Reason code for adjustment (optional - omit for no reason)'
+        default='',
+        help='Reason code for adjustment (default: empty) - use a valid code from your JobBOSS system'
     )
     
     return parser.parse_args()
