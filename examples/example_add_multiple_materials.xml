@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    Example: Add multiple materials to a job in one request
+    
+    This demonstrates how to add multiple MaterialRequirementAdd elements
+    within a single JobModRq to add multiple materials at once.
+    
+    This adds:
+    - MAT-001: quantity 10
+    - MAT-002: quantity 5
+    - MAT-003: quantity 25.5
+    
+    To job JOB-12345
+-->
+<JBXML>
+    <JBXMLRequest Session="{{SESSION_ID}}">
+        <JobModRq>
+            <JobMod>
+                <ID>JOB-12345</ID>
+                <LastUpdated>{{LAST_UPDATED}}</LastUpdated>
+            </JobMod>
+            <MaterialRequirementAdd>
+                <MaterialRef ID="MAT-001"/>
+                <RequirementProperties>
+                    <Quantity>10</Quantity>
+                </RequirementProperties>
+            </MaterialRequirementAdd>
+            <MaterialRequirementAdd>
+                <MaterialRef ID="MAT-002"/>
+                <RequirementProperties>
+                    <Quantity>5</Quantity>
+                </RequirementProperties>
+            </MaterialRequirementAdd>
+            <MaterialRequirementAdd>
+                <MaterialRef ID="MAT-003"/>
+                <RequirementProperties>
+                    <Quantity>25.5</Quantity>
+                </RequirementProperties>
+            </MaterialRequirementAdd>
+        </JobModRq>
+    </JBXMLRequest>
+</JBXML>

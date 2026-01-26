@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    Example: Query a job to get its LastUpdated timestamp
+    
+    This is Step 1 before adding materials to a job.
+    Replace {{SESSION_ID}} with your actual session ID.
+-->
+<JBXML>
+    <JBXMLRequest Session="{{SESSION_ID}}">
+        <JobQueryRq>
+            <JobQueryFilter>
+                <ID>JOB-12345</ID>
+                <IncludeJobOperations>false</IncludeJobOperations>
+                <IncludeComponents>false</IncludeComponents>
+                <IncludeMaterialRequirements>false</IncludeMaterialRequirements>
+            </JobQueryFilter>
+        </JobQueryRq>
+    </JBXMLRequest>
+</JBXML>

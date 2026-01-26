@@ -1,4 +1,31 @@
-# JobBOSS Material Quantity Update Tool
+# JobBOSS Utilities
+
+Python tools for managing JobBOSS data via the XML SDK.
+
+## Tools
+
+This repository contains two sets of tools:
+
+### 1. Material Inventory Management (`xml_generator.py` / `xml_executor.py`)
+Adjust material on-hand quantities in inventory.
+
+[See original README below](#material-inventory-management)
+
+### 2. Job Material Management (`job_material_generator.py` / `job_material_executor.py`)
+Add material requirements to existing jobs.
+
+**[See detailed documentation →](README_JOB_MATERIALS.md)**
+
+Quick example:
+```powershell
+# Add 10 units of material MAT-001 to job JOB-12345
+python job_material_generator.py --job JOB-12345 --material MAT-001 --quantity 10
+python job_material_executor.py --manifest ./pending_updates/manifest.json
+```
+
+---
+
+## Material Inventory Management
 
 A two-phase workflow for updating material quantities in JobBOSS via the XML SDK.
 

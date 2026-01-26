@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    Example: Add a material requirement to an existing job
+    
+    This demonstrates the JobModRq with MaterialRequirementAdd schema.
+    
+    To add material ID "MAT-001" with quantity 10 to job "JOB-12345":
+    
+    1. First query the job to get its LastUpdated timestamp (see example_job_query.xml)
+    2. Replace {{SESSION_ID}} with your actual session ID
+    3. Replace {{LAST_UPDATED}} with the LastUpdated value from step 1
+    4. Modify ID, material ID, and quantity as needed
+-->
+<JBXML>
+    <JBXMLRequest Session="{{SESSION_ID}}">
+        <JobModRq>
+            <JobMod>
+                <ID>JOB-12345</ID>
+                <LastUpdated>{{LAST_UPDATED}}</LastUpdated>
+            </JobMod>
+            <MaterialRequirementAdd>
+                <MaterialRef ID="MAT-001"/>
+                <RequirementProperties>
+                    <Quantity>10</Quantity>
+                </RequirementProperties>
+            </MaterialRequirementAdd>
+        </JobModRq>
+    </JBXMLRequest>
+</JBXML>
