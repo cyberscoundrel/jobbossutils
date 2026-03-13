@@ -104,9 +104,10 @@ def create_job_query_xml(session_id_placeholder: str, job_id: str) -> str:
             <JobQueryFilter>
                 <ID>{job_id}</ID>
                 <IncludeAdditionalCharges>false</IncludeAdditionalCharges>
-                <IncludeJobOperations>false</IncludeJobOperations>
-                <IncludeComponents>false</IncludeComponents>
+                <IncludeDeliveries>false</IncludeDeliveries>
+                <IncludeRoutingLines>false</IncludeRoutingLines>
                 <IncludeMaterialRequirements>false</IncludeMaterialRequirements>
+                <IncludeComponents>false</IncludeComponents>
             </JobQueryFilter>
         </JobQueryRq>
     </JBXMLRequest>
