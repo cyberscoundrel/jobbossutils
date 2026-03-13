@@ -1,13 +1,21 @@
 """
-XML Generator for JobBOSS Material Quantity Updates
+XML Generator for JobBOSS Material Updates
 
 Takes a list of material IDs (with duplicates representing individual pieces)
 and generates XML documents for auditing before execution.
 
-Each occurrence of a material ID in the input = 1 piece to remove from inventory.
+Supports two modes:
+  adjust          - Adjust on-hand inventory quantities (AdjustOnHandQty).
+                    Each occurrence = 1 piece to remove from inventory.
+  job-requirement - Add materials as requirements on an existing job
+                    (JobModRq / MaterialRequirementAdd).
 
 Usage:
+    # Adjust mode (default) - subtract from inventory
     python xml_generator.py --input material_ids.txt --output-dir ./pending_updates
+
+    # Job-requirement mode - add materials to a job
+    python xml_generator.py --mode job-requirement --job JOB-12345 --input material_ids.txt
 
 Input file format (one material ID per line, duplicates = multiple pieces):
     MAT-001
@@ -16,7 +24,8 @@ Input file format (one material ID per line, duplicates = multiple pieces):
     # This is a comment
     MAT-001
     
-This would generate: MAT-001: -3, MAT-002: -1
+adjust mode generates:       MAT-001: -3, MAT-002: -1
+job-requirement mode generates: MAT-001: 3, MAT-002: 1 (added to the job)
 """
 
 import os
@@ -31,16 +40,17 @@ from collections import Counter
 # Material Counting
 # =============================================================================
 
-def count_materials(material_ids: list[str]) -> dict[str, int]:
+def count_materials(material_ids: list[str], negate: bool = True) -> dict[str, int]:
     """
     Count occurrences of each material ID.
-    Each occurrence = 1 piece to remove from inventory.
     
-    Returns dict of {material_id: negative_count} for subtraction
+    When negate=True (adjust mode), returns negative counts for inventory subtraction.
+    When negate=False (job-requirement mode), returns positive counts.
     """
     counts = Counter(material_ids)
-    # Return negative counts to subtract from inventory
-    return {mat_id: -count for mat_id, count in counts.items()}
+    if negate:
+        return {mat_id: -count for mat_id, count in counts.items()}
+    return dict(counts)
 
 
 # =============================================================================
@@ -85,6 +95,46 @@ def create_material_mod_xml(session_id_placeholder: str, material_id: str,
 </JBXML>'''
 
 
+def create_job_query_xml(session_id_placeholder: str, job_id: str) -> str:
+    """Create XML to query a job and get its LastUpdated timestamp."""
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
+<JBXML>
+    <JBXMLRequest Session="{session_id_placeholder}">
+        <JobQueryRq>
+            <JobQueryFilter>
+                <ID>{job_id}</ID>
+                <IncludeJobOperations>false</IncludeJobOperations>
+                <IncludeComponents>false</IncludeComponents>
+                <IncludeMaterialRequirements>false</IncludeMaterialRequirements>
+            </JobQueryFilter>
+        </JobQueryRq>
+    </JBXMLRequest>
+</JBXML>'''
+
+
+def create_job_material_add_xml(session_id_placeholder: str, job_id: str,
+                                last_updated_placeholder: str, material_id: str,
+                                quantity: int) -> str:
+    """Create XML to add a material requirement to a job."""
+    return f'''<?xml version="1.0" encoding="UTF-8"?>
+<JBXML>
+    <JBXMLRequest Session="{session_id_placeholder}">
+        <JobModRq>
+            <JobMod>
+                <ID>{job_id}</ID>
+                <LastUpdated>{last_updated_placeholder}</LastUpdated>
+            </JobMod>
+            <MaterialRequirementAdd>
+                <MaterialRef ID="{material_id}"/>
+                <RequirementProperties>
+                    <Quantity>{quantity}</Quantity>
+                </RequirementProperties>
+            </MaterialRequirementAdd>
+        </JobModRq>
+    </JBXMLRequest>
+</JBXML>'''
+
+
 # =============================================================================
 # File I/O
 # =============================================================================
@@ -103,14 +153,19 @@ def load_material_ids(input_path: str) -> list[str]:
 
 def generate_update_package(material_ids: list[str], 
                             output_dir: str,
-                            reason_id: str = "") -> dict:
+                            mode: str = "adjust",
+                            reason_id: str = "",
+                            job_id: str = "") -> dict:
     """
     Generate XML files and manifest for material updates.
     
-    Creates:
-    - manifest.json: Summary of all updates for review
-    - query_<material_id>.xml: Query XML for each material
-    - update_<material_id>.xml: Update XML template for each material
+    In 'adjust' mode (default):
+    - query_<material_id>.xml: Query each material for LastUpdated
+    - update_<material_id>.xml: AdjustOnHandQty to subtract from inventory
+    
+    In 'job-requirement' mode:
+    - query_job.xml: Query the job for LastUpdated (shared across materials)
+    - add_<material_id>.xml: MaterialRequirementAdd per material
     
     The XML files contain placeholders:
     - {{SESSION_ID}}: Replaced at execution time with actual session
@@ -118,44 +173,62 @@ def generate_update_package(material_ids: list[str],
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # Count materials
-    quantity_changes = count_materials(material_ids)
+    quantity_changes = count_materials(material_ids, negate=(mode == "adjust"))
     
     manifest = {
         "generated_at": datetime.now().isoformat(),
-        "reason_id": reason_id,
+        "mode": mode,
         "total_materials": len(quantity_changes),
         "total_pieces": sum(abs(q) for q in quantity_changes.values()),
         "materials": [],
-        "input_ids": material_ids,  # Original list for reference/audit
+        "input_ids": material_ids,
     }
     
-    print(f"\nGenerating XML for {len(quantity_changes)} unique materials...")
-    print(f"Total pieces to remove: {sum(abs(q) for q in quantity_changes.values())}")
+    if mode == "adjust":
+        manifest["reason_id"] = reason_id
+        print(f"\nGenerating XML for {len(quantity_changes)} unique materials...")
+        print(f"Total pieces to remove: {manifest['total_pieces']}")
+    else:
+        manifest["job_id"] = job_id
+        print(f"\nGenerating XML for {len(quantity_changes)} unique materials...")
+        print(f"Target job: {job_id}")
+        print(f"Total pieces to add as requirements: {manifest['total_pieces']}")
     print()
     
-    for material_id, quantity in sorted(quantity_changes.items()):
-        # Sanitize material ID for filename (replace unsafe chars)
-        safe_id = "".join(c if c.isalnum() or c in '-_' else '_' for c in material_id)
-        
-        print(f"  {material_id}: {quantity} pieces")
-        
-        # Generate query XML
-        query_xml = create_material_query_xml("{{SESSION_ID}}", material_id)
-        query_file = f"query_{safe_id}.xml"
+    if mode == "job-requirement":
+        # Single job query XML shared across all materials
+        query_xml = create_job_query_xml("{{SESSION_ID}}", job_id)
+        query_file = "query_job.xml"
         query_path = os.path.join(output_dir, query_file)
         with open(query_path, 'w', encoding='utf-8') as f:
             f.write(query_xml)
+    
+    for material_id, quantity in sorted(quantity_changes.items()):
+        safe_id = "".join(c if c.isalnum() or c in '-_' else '_' for c in material_id)
         
-        # Generate update XML (with placeholder for LastUpdated)
-        update_xml = create_material_mod_xml(
-            "{{SESSION_ID}}", 
-            material_id,
-            "{{LAST_UPDATED}}",
-            quantity,
-            reason_id
-        )
-        update_file = f"update_{safe_id}.xml"
+        print(f"  {material_id}: {quantity:+d} pieces")
+        
+        if mode == "adjust":
+            query_xml = create_material_query_xml("{{SESSION_ID}}", material_id)
+            query_file = f"query_{safe_id}.xml"
+            query_path = os.path.join(output_dir, query_file)
+            with open(query_path, 'w', encoding='utf-8') as f:
+                f.write(query_xml)
+            
+            update_xml = create_material_mod_xml(
+                "{{SESSION_ID}}", material_id, "{{LAST_UPDATED}}",
+                quantity, reason_id
+            )
+            update_file = f"update_{safe_id}.xml"
+        else:
+            # job-requirement: query_file is the shared query_job.xml
+            query_file = "query_job.xml"
+            update_xml = create_job_material_add_xml(
+                "{{SESSION_ID}}", job_id, "{{LAST_UPDATED}}",
+                material_id, quantity
+            )
+            update_file = f"add_{safe_id}.xml"
+        
         update_path = os.path.join(output_dir, update_file)
         with open(update_path, 'w', encoding='utf-8') as f:
             f.write(update_xml)
@@ -168,16 +241,17 @@ def generate_update_package(material_ids: list[str],
             "update_file": update_file,
         })
     
-    # Write manifest
     manifest_path = os.path.join(output_dir, "manifest.json")
     with open(manifest_path, 'w', encoding='utf-8') as f:
         json.dump(manifest, f, indent=2)
     
+    update_label = "update" if mode == "adjust" else "add"
+    query_count = len(quantity_changes) if mode == "adjust" else 1
     print()
     print(f"Generated files in: {output_dir}")
     print(f"  - manifest.json (review this first!)")
-    print(f"  - {len(quantity_changes)} query XML files")
-    print(f"  - {len(quantity_changes)} update XML files")
+    print(f"  - {query_count} query XML file{'s' if query_count > 1 else ''}")
+    print(f"  - {len(quantity_changes)} {update_label} XML files")
     
     return manifest
 
@@ -188,12 +262,21 @@ def generate_update_package(material_ids: list[str],
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Generate XML documents for JobBOSS material quantity updates',
+        description='Generate XML documents for JobBOSS material updates',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
+Modes:
+    adjust (default)  Adjust material on-hand inventory via AdjustOnHandQty.
+    job-requirement   Add materials as requirements on an existing job.
+
 Examples:
+    # Adjust mode (default) - subtract from inventory
     python xml_generator.py --input material_ids.txt --output-dir ./pending_updates
     python xml_generator.py -i used_materials.txt -o ./batch_001 --reason CONSUMED
+
+    # Job-requirement mode - add materials to a job
+    python xml_generator.py --mode job-requirement --job JOB-12345 -i material_ids.txt
+    python xml_generator.py --mode job-requirement --job 99001 -i parts.txt -o ./job_updates
 
 Input file format (one material ID per line):
     MAT-001
@@ -202,12 +285,22 @@ Input file format (one material ID per line):
     # This is a comment (ignored)
     MAT-001
     
-Each line = 1 piece removed. Above example generates:
-    MAT-001: -3 pieces
-    MAT-002: -1 piece
+adjust mode:          MAT-001: -3 pieces, MAT-002: -1 piece
+job-requirement mode: MAT-001: +3 pieces, MAT-002: +1 piece (added to job)
         '''
     )
     
+    parser.add_argument(
+        '--mode',
+        choices=['adjust', 'job-requirement'],
+        default='adjust',
+        help='Operation mode (default: adjust)'
+    )
+    parser.add_argument(
+        '--job', '-j',
+        default='',
+        help='Job ID to add material requirements to (required for job-requirement mode)'
+    )
     parser.add_argument(
         '--input', '-i',
         required=True,
@@ -221,7 +314,7 @@ Each line = 1 piece removed. Above example generates:
     parser.add_argument(
         '--reason', '-r',
         default='',
-        help='Reason code for adjustment (default: empty) - use a valid code from your JobBOSS system'
+        help='Reason code for adjustment (adjust mode only, default: empty)'
     )
     
     return parser.parse_args()
@@ -234,12 +327,16 @@ def main():
     print("JobBOSS XML Generator")
     print("=" * 60)
     print(f"Timestamp: {datetime.now().isoformat()}")
+    print(f"Mode: {args.mode}")
+    
+    if args.mode == "job-requirement" and not args.job:
+        print("\nERROR: --job is required when using --mode job-requirement")
+        sys.exit(1)
     
     if not os.path.exists(args.input):
         print(f"\nERROR: Input file not found: {args.input}")
         sys.exit(1)
     
-    # Load material IDs
     material_ids = load_material_ids(args.input)
     
     if not material_ids:
@@ -248,8 +345,12 @@ def main():
     
     print(f"\nLoaded {len(material_ids)} material ID entries from: {args.input}")
     
-    # Generate the XML package
-    manifest = generate_update_package(material_ids, args.output_dir, args.reason)
+    manifest = generate_update_package(
+        material_ids, args.output_dir,
+        mode=args.mode, reason_id=args.reason, job_id=args.job
+    )
+    
+    manifest_rel = os.path.join(args.output_dir, 'manifest.json')
     
     print()
     print("=" * 60)
@@ -257,17 +358,17 @@ def main():
     print("=" * 60)
     print()
     print("1. Review the manifest:")
-    print(f"   {os.path.join(args.output_dir, 'manifest.json')}")
+    print(f"   {manifest_rel}")
     print()
     print("2. Inspect individual XML files if needed")
     print()
     print("3. When ready to execute, run:")
-    print(f"   python xml_executor.py --manifest {os.path.join(args.output_dir, 'manifest.json')} --user USERNAME --password PASSWORD")
+    print(f"   python xml_executor.py --manifest {manifest_rel} --user USERNAME --password PASSWORD")
     print()
     print("   Or with environment variables:")
     print("   set JOBBOSS_USER=your_username")
     print("   set JOBBOSS_PASSWORD=your_password")
-    print(f"   python xml_executor.py --manifest {os.path.join(args.output_dir, 'manifest.json')}")
+    print(f"   python xml_executor.py --manifest {manifest_rel}")
 
 
 if __name__ == "__main__":

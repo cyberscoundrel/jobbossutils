@@ -116,19 +116,31 @@ def execute_updates(manifest_path: str, username: str, password: str,
     with open(manifest_path, 'r', encoding='utf-8') as f:
         manifest = json.load(f)
     
+    mode = manifest.get("mode", "adjust")
+    
     print(f"Manifest generated at: {manifest['generated_at']}")
-    print(f"Reason code: {manifest['reason_id']}")
-    print(f"Materials to update: {manifest['total_materials']}")
-    print(f"Total pieces to remove: {manifest['total_pieces']}")
+    print(f"Mode: {mode}")
+    if mode == "job-requirement":
+        print(f"Job ID: {manifest['job_id']}")
+        print(f"Materials to add: {manifest['total_materials']}")
+        print(f"Total pieces to add as requirements: {manifest['total_pieces']}")
+    else:
+        print(f"Reason code: {manifest.get('reason_id', '')}")
+        print(f"Materials to update: {manifest['total_materials']}")
+        print(f"Total pieces to remove: {manifest['total_pieces']}")
     print()
     
-    # Dry run - just show what would happen
     if dry_run:
         print("DRY RUN MODE - No changes will be made")
         print()
-        print("Would execute the following updates:")
-        for item in manifest["materials"]:
-            print(f"  {item['material_id']}: {item['quantity_change']:+d} ({item['occurrences']} pieces)")
+        if mode == "job-requirement":
+            print(f"Would add the following material requirements to job {manifest['job_id']}:")
+            for item in manifest["materials"]:
+                print(f"  {item['material_id']}: {item['quantity_change']} pieces")
+        else:
+            print("Would execute the following inventory adjustments:")
+            for item in manifest["materials"]:
+                print(f"  {item['material_id']}: {item['quantity_change']:+d} ({item['occurrences']} pieces)")
         print()
         print("To execute for real, remove the --dry-run flag.")
         return results
@@ -173,7 +185,10 @@ def execute_updates(manifest_path: str, username: str, password: str,
             material_id = item["material_id"]
             quantity_change = item["quantity_change"]
             
-            print(f"\nProcessing: {material_id} ({quantity_change:+d} pieces)")
+            if mode == "job-requirement":
+                print(f"\nProcessing: Add {quantity_change} of {material_id} to job {manifest['job_id']}")
+            else:
+                print(f"\nProcessing: {material_id} ({quantity_change:+d} pieces)")
             
             # Step 1: Load and execute query XML to get LastUpdated
             query_path = os.path.join(manifest_dir, item["query_file"])
@@ -233,7 +248,8 @@ def execute_updates(manifest_path: str, username: str, password: str,
             # Extract LastUpdated
             last_updated = parse_response_for_last_updated(response)
             if not last_updated:
-                error = "Material not found or no LastUpdated in response"
+                target = f"Job {manifest['job_id']}" if mode == "job-requirement" else f"Material {material_id}"
+                error = f"{target} not found or no LastUpdated in response"
                 print(f"  ERROR: {error}")
                 results["failed"].append({
                     "material_id": material_id,
@@ -301,7 +317,10 @@ def execute_updates(manifest_path: str, username: str, password: str,
                 continue
             
             if check_response_success(response):
-                print(f"  SUCCESS: Adjusted by {quantity_change:+d}")
+                if mode == "job-requirement":
+                    print(f"  SUCCESS: Added {quantity_change} of {material_id} to job {manifest['job_id']}")
+                else:
+                    print(f"  SUCCESS: Adjusted by {quantity_change:+d}")
                 results["success"].append({
                     "material_id": material_id,
                     "quantity_change": quantity_change
@@ -433,8 +452,14 @@ def main():
     print(f"Failed:     {len(results['failed'])}")
     
     if results["success"]:
-        total_adjusted = sum(item["quantity_change"] for item in results["success"])
-        print(f"Total quantity adjusted: {total_adjusted:+d}")
+        total = sum(item["quantity_change"] for item in results["success"])
+        # Load manifest to check mode for summary formatting
+        with open(args.manifest, 'r', encoding='utf-8') as f:
+            manifest_data = json.load(f)
+        if manifest_data.get("mode") == "job-requirement":
+            print(f"Total pieces added as requirements: {total}")
+        else:
+            print(f"Total quantity adjusted: {total:+d}")
     
     if results["failed"]:
         print("\nFailed materials:")
