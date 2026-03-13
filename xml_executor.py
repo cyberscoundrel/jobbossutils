@@ -25,6 +25,7 @@ import argparse
 from datetime import datetime
 
 try:
+    import pythoncom
     import win32com.client
 except ImportError:
     print("ERROR: pywin32 is not installed. Run: pip install pywin32")
@@ -145,7 +146,10 @@ def execute_updates(manifest_path: str, username: str, password: str,
         print("To execute for real, remove the --dry-run flag.")
         return results
     
-    # Create COM object
+    # Initialize COM as STA (Single-Threaded Apartment) to match the
+    # threading model the JobBOSS COM object expects (same as VB/VBA).
+    pythoncom.CoInitialize()
+    
     print("Connecting to JobBOSS...")
     try:
         jb = win32com.client.Dispatch("JBInterface.JBRequestProcessor")
@@ -335,13 +339,13 @@ def execute_updates(manifest_path: str, username: str, password: str,
                 })
     
     finally:
-        # Always close the session
         print("\nClosing session...")
         try:
             jb.CloseSession(session_id)
             print("Session closed.")
         except Exception as e:
             print(f"Warning: Failed to close session: {e}")
+        pythoncom.CoUninitialize()
     
     return results
 
